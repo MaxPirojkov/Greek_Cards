@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f4f5f1">
+<title>Греческие карточки</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one narrow column, app bar on top, the card as the single object on the page, tab bar for Учить / Мои слова.
+   Palette taken from Greek Studio: sage ground, deep green ink and buttons, beige topic pills. */
+:root{
+  --bg:#f4f5f1; --surface:#fcfcf8; --card:#ffffff; --ink:#223b3b; --muted:#6a7574; --line:#dde3dd;
+  --accent:#31655d; --accent-ink:#ffffff; --accent-soft:#eaf3ec; --logo:#1f3e3b;
+  --pill:#f1e6d6; --pill-ink:#885725;
+  --good:#31655d; --good-soft:#eaf3ec; --bad:#a3532a; --bad-soft:#f6e6da;
+  --shadow:0 1px 2px rgba(34,59,59,.04);
+  --f-word:-apple-system,"SF Pro Display","Inter","Segoe UI",system-ui,sans-serif;
+  --f-ui:-apple-system,"SF Pro Text","Inter","Segoe UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111917; --surface:#151f1d; --card:#1a2523; --ink:#e3ece9; --muted:#9aa8a5; --line:#2a3836;
+  --accent:#7cbcae; --accent-ink:#0f1d1a; --accent-soft:#1e3330; --logo:#7cbcae;
+  --pill:#3a2d1e; --pill-ink:#e4bd8f;
+  --good:#7cbcae; --good-soft:#1e3330; --bad:#e8a07c; --bad-soft:#3a251a;
+  --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111917; --surface:#151f1d; --card:#1a2523; --ink:#e3ece9; --muted:#9aa8a5; --line:#2a3836;
+  --accent:#7cbcae; --accent-ink:#0f1d1a; --accent-soft:#1e3330; --logo:#7cbcae;
+  --pill:#3a2d1e; --pill-ink:#e4bd8f;
+  --good:#7cbcae; --good-soft:#1e3330; --bad:#e8a07c; --bad-soft:#3a251a;
+  --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0}
+html,body{min-height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.45}
+.wrap{max-width:560px;margin:0 auto;padding-inline:16px;padding-block:12px 96px;display:flex;flex-direction:column;gap:16px}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{width:44px;height:44px;border-radius:12px;background:var(--logo);color:var(--bg);display:grid;place-items:center;font-size:26px;font-weight:500;line-height:1;padding-bottom:3px}
+.brand > div{display:flex;flex-direction:column}
+.brand b{font-weight:700;font-size:21px;letter-spacing:-.01em}
+.brand small{color:var(--muted);font-size:12px}
+.iconbtn{border:1px solid var(--line);background:var(--surface);border-radius:10px;width:40px;height:40px;display:grid;place-items:center}
+.iconbtn svg{width:20px;height:20px}
+
+.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px}
+.modes button{border:0;background:transparent;border-radius:9px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:1px;color:var(--muted)}
+.modes button b{font-size:13px;font-weight:600;color:var(--ink)}
+.modes button span{font-size:11px}
+.modes button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
+.modes button[aria-pressed="true"] b{color:var(--accent)}
+
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row.between{justify-content:space-between}
+select,input[type=text],textarea{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 11px;min-width:0}
+.muted{color:var(--muted)}
+.small{font-size:12.5px}
+.progress{height:4px;background:var(--line);border-radius:4px;overflow:hidden;flex:1;min-width:80px}
+.progress i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
+.count{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted)}
+
+/* the card */
+.stage{perspective:1400px}
+.card{position:relative;width:100%;height:min(62vh,360px);min-height:260px;border:0;padding:0;background:none;display:block;text-align:center}
+.inner{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .55s cubic-bezier(.3,.7,.2,1)}
+.card.flipped .inner{transform:rotateY(180deg)}
+.face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;background:var(--card);border-radius:26px;box-shadow:var(--shadow);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:28px 22px;overflow:hidden}
+.face.back{transform:rotateY(180deg)}
+.face .tag{position:absolute;top:14px;left:16px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.face .hint{position:absolute;bottom:14px;left:0;right:0;font-size:12px;color:var(--muted)}
+.face .topic{position:absolute;top:14px;right:16px;font-size:12px;font-weight:600;color:var(--pill-ink);background:var(--pill);border-radius:999px;padding:4px 11px;max-width:55%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.w-el{font-family:var(--f-word);font-weight:500;letter-spacing:-.01em;font-size:clamp(30px,8.5vw,46px);line-height:1.15;overflow-wrap:anywhere;text-wrap:balance}
+.w-ru{font-family:var(--f-word);font-weight:500;font-size:clamp(26px,7vw,38px);line-height:1.2;overflow-wrap:anywhere;text-wrap:balance}
+.w-ru.sub{font-size:clamp(18px,5vw,24px);color:var(--muted)}
+.note{font-size:14px;color:var(--muted);font-style:italic}
+.divider{width:48px;height:1px;background:var(--line)}
+.play{border:0;background:var(--accent-soft);color:var(--accent);border-radius:999px;width:56px;height:56px;display:grid;place-items:center;flex:none;transition:transform .15s}
+.play:active{transform:scale(.94)}
+.play svg{width:24px;height:24px}
+.play.big{width:108px;height:108px;background:var(--accent);color:var(--accent-ink)}
+.listen{border:0;background:var(--accent);color:var(--accent-ink);border-radius:10px;padding:10px 18px;font-weight:600;display:inline-flex;align-items:center;gap:8px;flex:none}
+.listen svg{width:18px;height:18px}
+.listen.speaking{animation:pulse 1s ease-in-out infinite}
+.play.big svg{width:44px;height:44px}
+.play.speaking{animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 10px color-mix(in srgb,var(--accent) 18%,transparent)}}
+
+.answer{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:13px 14px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.good{background:var(--good-soft);color:var(--good);border-color:transparent}
+.btn.bad{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--bad)}
+.btn:disabled{opacity:.45;cursor:default}
+
+.panel{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.panel h2{margin:0;font-size:18px;font-weight:700}
+.empty{text-align:center;padding:36px 20px}
+.empty .w-el{font-size:34px}
+
+/* manage */
+form.add{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+form.add label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted);min-width:0}
+form.add label.full{grid-column:1/-1}
+form.add .el-field{display:flex;gap:6px}
+form.add .el-field input{flex:1}
+form.add .el-field .play{width:40px;height:40px}
+form.add .el-field .play svg{width:18px;height:18px}
+form.add .actions{grid-column:1/-1;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+input.greek{font-family:var(--f-word);font-size:17px}
+@media (max-width:420px){form.add{grid-template-columns:1fr}}
+
+.list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:20px;background:var(--card);overflow:hidden}
+.item{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;border-top:1px solid var(--line)}
+.item:first-child{border-top:0}
+.item .play{width:36px;height:36px}
+.item .play svg{width:16px;height:16px}
+.item .txt{min-width:0}
+.item .txt b{font-family:var(--f-word);font-weight:500;font-size:17px;display:block;overflow-wrap:anywhere}
+.item .txt span{color:var(--muted);font-size:13.5px;overflow-wrap:anywhere}
+.item .meta{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.item .ops{display:flex;gap:4px}
+.item .ops button{border:0;background:transparent;padding:6px 8px;border-radius:8px;color:var(--muted);font-size:13px}
+.item .ops button:hover{background:var(--accent-soft);color:var(--ink)}
+.item .ops button.really{background:var(--bad-soft);color:var(--bad)}
+details.import{border:1px dashed var(--line);border-radius:14px;padding:12px 14px}
+details.import summary{cursor:pointer;font-weight:600}
+details.import textarea{width:100%;min-height:120px;margin-top:10px;font-family:var(--f-word)}
+
+/* settings sheet */
+.sheet{position:fixed;inset:0;background:rgba(8,16,28,.45);display:flex;align-items:flex-end;justify-content:center;z-index:20}
+.sheet .box{background:var(--surface);color:var(--ink);width:100%;max-width:560px;border-radius:20px 20px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;max-height:90vh;overflow:auto}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:7px 12px;font-size:13px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.field-label{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.warn{background:var(--bad-soft);color:var(--bad);border-radius:10px;padding:10px 12px;font-size:13.5px}
+
+nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center;gap:8px;padding:8px 16px calc(8px + env(safe-area-inset-bottom,0px));z-index:10}
+nav.tabs button{flex:1;max-width:240px;border:0;background:transparent;border-radius:10px;padding:9px;font-weight:600;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:8px}
+nav.tabs button svg{width:18px;height:18px}
+nav.tabs button[aria-selected="true"]{background:var(--accent-soft);color:var(--ink)}
+.toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:10px;font-size:13.5px;z-index:30;max-width:calc(100% - 32px)}
+.sync{font-size:11.5px;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){.inner{transition:none}.play.speaking{animation:none}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><span class="logo" aria-hidden="true">α</span><div><b>Λέξεις</b><small id="sync" class="sync">Сохранено на этом устройстве</small></div></div>
+    <button class="iconbtn" id="openSettings" aria-label="Настройки голоса">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+    </button>
+  </header>
+
+  <!-- STUDY -->
+  <section id="study" style="display:flex;flex-direction:column;gap:16px">
+    <div class="modes" role="group" aria-label="Режим проверки">
+      <button data-mode="ru" aria-pressed="true"><b>Рус → Гре</b><span>вижу перевод</span></button>
+      <button data-mode="el" aria-pressed="false"><b>Гре → Рус</b><span>вижу слово</span></button>
+      <button data-mode="ear" aria-pressed="false"><b>На слух</b><span>только голос</span></button>
+    </div>
+    <div class="row between">
+      <select id="topicFilter" aria-label="Тема"></select>
+      <div class="row" style="flex:1;justify-content:flex-end"><div class="progress"><i id="bar"></i></div><span class="count" id="count">0 / 0</span></div>
+    </div>
+    <div id="studyBody"></div>
+  </section>
+
+  <!-- MANAGE -->
+  <section id="manage" hidden style="display:flex;flex-direction:column;gap:16px">
+    <div class="panel">
+      <h2 id="formTitle">Новая карточка</h2>
+      <form class="add" id="addForm" autocomplete="off">
+        <label>По-русски<input type="text" id="fRu" required placeholder="спасибо"></label>
+        <label>По-гречески
+          <span class="el-field"><input type="text" id="fEl" class="greek" required placeholder="ευχαριστώ" lang="el">
+          <button type="button" class="play" id="fPlay" aria-label="Послушать"></button></span>
+        </label>
+        <label>Подсказка (необязательно)<input type="text" id="fNote" placeholder="эфхаристО"></label>
+        <label>Тема (необязательно)<input type="text" id="fTopic" list="topicsList" placeholder="Вежливость"></label>
+        <datalist id="topicsList"></datalist>
+        <div class="actions">
+          <button type="button" class="btn ghost" id="fCancel" hidden>Отмена</button>
+          <button type="submit" class="btn primary" id="fSubmit">Добавить</button>
+        </div>
+      </form>
+    </div>
+    <details class="import" id="importBox">
+      <summary>Добавить списком</summary>
+      <p class="small muted">Одна карточка на строку: греческое слово, тире, перевод. Тему можно дописать после второй черты.<br>Например: <span style="font-family:var(--f-word)">καλημέρα — доброе утро | Приветствия</span></p>
+      <textarea id="importText" lang="el" placeholder="νερό — вода&#10;ψωμί — хлеб | Еда"></textarea>
+      <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn primary" id="importBtn" type="button">Добавить все</button></div>
+    </details>
+    <div class="row between">
+      <input type="text" id="search" placeholder="Поиск по словам" aria-label="Поиск" style="flex:1">
+      <span class="count" id="total"></span>
+    </div>
+    <div id="listBox"></div>
+  </section>
+</div>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" data-tab="study" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="14" height="16" rx="2.5"/><path d="M8 3h10a2 2 0 0 1 2 2v12"/></svg>Учить</button>
+  <button role="tab" data-tab="manage" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 6h14M5 12h14M5 18h9"/></svg>Мои слова</button>
+</nav>
+
+<div class="sheet" id="settings" hidden>
+  <div class="box" role="dialog" aria-label="Настройки голоса">
+    <div class="row between"><h2 style="margin:0;font-family:var(--f-word);font-size:19px">Голос</h2><button class="btn ghost" id="closeSettings">Готово</button></div>
+    <div id="voiceWarn" class="warn" hidden></div>
+    <div><div class="field-label">Греческий голос</div><select id="voiceSel" style="width:100%;margin-top:6px"></select></div>
+    <div><div class="field-label">Скорость</div><div class="seg" id="rateSeg" style="margin-top:6px">
+      <button data-v="0.65">Медленно · 0.65</button><button data-v="0.85">Спокойно · 0.85</button><button data-v="1">Обычно · 1.0</button><button data-v="1.15">Быстрее · 1.15</button></div></div>
+    <div><div class="field-label">Повторять слово</div><div class="seg" id="repSeg" style="margin-top:6px">
+      <button data-v="1">Один раз</button><button data-v="2">Дважды</button><button data-v="3">Трижды</button></div></div>
+    <div><div class="field-label">Пауза между повторами</div><div class="seg" id="pauseSeg" style="margin-top:6px">
+      <button data-v="0.5">0.5 с</button><button data-v="1.4">1.4 с</button><button data-v="2.5">2.5 с</button></div></div>
+    <button class="btn" id="testVoice" type="button">Проверить: Καλημέρα, τι κάνεις;</button>
+    <p class="small muted" style="margin:0">Озвучку делает голос, встроенный в телефон или компьютер. Если греческого голоса нет, его можно скачать в настройках устройства: на iPhone «Универсальный доступ → Устный контент → Голоса → Греческий», на Android «Синтез речи Google → Установить голосовые данные».</p>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9.5v5a1 1 0 0 0 1 1h3l4.3 3.6a.6.6 0 0 0 1-.5V5.4a.6.6 0 0 0-1-.5L8 8.5H5a1 1 0 0 0-1 1z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.6 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+const LISTEN = '<button class="listen" data-say>'+ICON_PLAY+'<span>Слушать</span></button>';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- local storage helpers ---------- */
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+
+/* ---------- state ---------- */
+let cards = LS.get('gk.cards', []);          // [{id, ru, el, note, topic, created, right, wrong}]
+let dirtyLocal = LS.get('gk.pending', false);  // cards changed while cloud was unreachable
+let settings = Object.assign({voice:'', rate:0.85, rep:1, pause:1.4, mode:'ru', topic:''}, LS.get('gk.settings', {}));
+let col = null;                               // db collection when cloud is available
+
+const STARTER = [
+  ['Γεια σου','привет','я су','Приветствия'],
+  ['Καλημέρα','доброе утро','калимЕра','Приветствия'],
+  ['Καλησπέρα','добрый вечер','калиспЕра','Приветствия'],
+  ['Καληνύχτα','спокойной ночи','калинИхта','Приветствия'],
+  ['Τι κάνεις;','как дела?','ти кАнис','Приветствия'],
+  ['Ευχαριστώ','спасибо','эфхаристО','Вежливость'],
+  ['Παρακαλώ','пожалуйста','паракалО','Вежливость'],
+  ['Συγγνώμη','извините','сигнОми','Вежливость'],
+  ['Ναι','да','нэ','Базовые'],
+  ['Όχι','нет','Охи','Базовые'],
+  ['Νερό','вода','нэрО','Базовые'],
+  ['Ψωμί','хлеб','псомИ','Базовые'],
+  ['Θάλασσα','море','тАласа (θ как англ. th)','Базовые'],
+  ['Φίλος','друг','фИлос','Базовые'],
+];
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const topics = () => [...new Set(cards.map(c => (c.topic || '').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
+
+function persistLocal(){ LS.set('gk.cards', cards); LS.set('gk.pending', dirtyLocal); }
+
+async function saveCard(c){
+  const i = cards.findIndex(x => x.id === c.id);
+  if (i >= 0) cards[i] = c; else cards.push(c);
+  if (col){ try{ await col.doc(c.id).set(c); }catch(e){ dirtyLocal = true; } } else dirtyLocal = true;
+  persistLocal(); refreshAll();
+}
+async function saveMany(list){
+  for (const c of list){ const i = cards.findIndex(x=>x.id===c.id); if(i>=0) cards[i]=c; else cards.push(c); }
+  persistLocal(); refreshAll();
+  if (col){ for (const c of list){ try{ await col.doc(c.id).set(c); }catch(e){ dirtyLocal = true; } } } else dirtyLocal = true;
+  persistLocal();
+}
+async function removeCard(id){
+  cards = cards.filter(c => c.id !== id);
+  persistLocal(); refreshAll();
+  if (col){ try{ await col.doc(id).delete(); }catch(e){} }
+}
+
+/* ---------- cloud sync (per-person, private) ---------- */
+(async () => {
+  try{
+    if (!window.claude?.use) return;
+    const [db, user] = await Promise.all([claude.use('db'), claude.use('user')]);
+    if (!db || !user) return;
+    const id = await user.id();
+    if (!id) return;
+    col = db.collection('data/users/' + id);
+    let first = true;
+    col.onSnapshot(async snap => {
+      const remote = snap.docs.map(d => Object.assign({id: d.id}, d.data()));
+      if (first){
+        first = false;
+        if (dirtyLocal && cards.length){
+          const have = new Set(remote.map(r => r.id));
+          const missing = cards.filter(c => !have.has(c.id));
+          for (const c of missing){ try{ await col.doc(c.id).set(c); remote.push(c); }catch(e){} }
+          dirtyLocal = false;
+        }
+      }
+      cards = remote;
+      persistLocal(); refreshAll();
+    }, () => { col = null; setSync(); });
+    setSync();
+  }catch(e){ col = null; }
+})();
+function setSync(){ $('#sync').textContent = col ? 'Сохранено в вашем аккаунте' : 'Сохранено на этом устройстве'; }
+
+/* ---------- speech ---------- */
+const synth = window.speechSynthesis;
+let voices = [], speakTimer = null, speakingBtn = null;
+function greekVoices(){ return voices.filter(v => /^el([-_]|$)/i.test(v.lang)); }
+function rankVoice(v){ const n = v.name.toLowerCase(); let s = 0;
+  if (/natural|neural|online|premium|enhanced/.test(n)) s += 3; if (/google/.test(n)) s += 2; if (/melina|nikos|athina/.test(n)) s += 1; if (v.localService) s += .5; return s; }
+function pickVoice(){
+  const g = greekVoices(); if (!g.length) return null;
+  return g.find(v => v.name === settings.voice) || g.slice().sort((a,b)=>rankVoice(b)-rankVoice(a))[0];
+}
+function loadVoices(){
+  if (!synth) return; voices = synth.getVoices();
+  const g = greekVoices(), sel = $('#voiceSel'), cur = pickVoice();
+  sel.innerHTML = g.length ? g.map(v => `<option value="${esc(v.name)}"${cur && v.name===cur.name?' selected':''}>${esc(v.name)} (${esc(v.lang)})</option>`).join('')
+                           : '<option value="">Греческий голос не найден</option>';
+  const w = $('#voiceWarn');
+  if (!synth){ w.hidden = false; w.textContent = 'Этот браузер не умеет озвучивать текст. Откройте страницу в Safari или Chrome.'; }
+  else if (voices.length && !g.length){ w.hidden = false; w.textContent = 'На этом устройстве нет греческого голоса. Озвучка может звучать с чужим акцентом или не работать. Как добавить голос, написано внизу.'; }
+  else w.hidden = true;
+}
+if (synth){ loadVoices(); synth.addEventListener?.('voiceschanged', loadVoices); setTimeout(loadVoices, 600); }
+else loadVoices();
+
+function stopSpeak(){ clearTimeout(speakTimer); try{ synth && synth.cancel(); }catch(e){} if (speakingBtn){ speakingBtn.classList.remove('speaking'); speakingBtn = null; } }
+function speak(text, btn){
+  if (!synth || !text) return;
+  stopSpeak();
+  let left = Number(settings.rep) || 1;
+  if (btn){ speakingBtn = btn; btn.classList.add('speaking'); }
+  const once = () => {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'el-GR'; const v = pickVoice(); if (v) u.voice = v;
+    u.rate = Number(settings.rate) || 1;
+    u.onend = u.onerror = () => { left--; if (left > 0) speakTimer = setTimeout(once, settings.pause * 1000); else if (speakingBtn){ speakingBtn.classList.remove('speaking'); speakingBtn = null; } };
+    synth.speak(u);
+  };
+  once();
+}
+
+/* ---------- study session ---------- */
+let queue = [], pos = 0, flipped = false, results = {right:0, wrong:0}, missed = [];
+function pool(){ return settings.topic ? cards.filter(c => (c.topic||'') === settings.topic) : cards.slice(); }
+function shuffle(a){ for (let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function startSession(list){ queue = shuffle((list || pool()).map(c => c.id)); pos = 0; flipped = false; results = {right:0, wrong:0}; missed = []; renderStudy(true); }
+
+function renderTopics(){
+  const t = topics(), sel = $('#topicFilter');
+  if (settings.topic && !t.includes(settings.topic)) settings.topic = '';
+  sel.innerHTML = `<option value="">Все темы · ${cards.length}</option>` + t.map(x => `<option value="${esc(x)}"${x===settings.topic?' selected':''}>${esc(x)} · ${cards.filter(c=>c.topic===x).length}</option>`).join('');
+  sel.hidden = !cards.length;
+  $('#topicsList').innerHTML = t.map(x => `<option value="${esc(x)}">`).join('');
+}
+
+function current(){ return cards.find(c => c.id === queue[pos]); }
+
+function renderStudy(autoplay){
+  const box = $('#studyBody');
+  // drop ids of deleted cards
+  queue = queue.filter((id, i) => i < pos || cards.some(c => c.id === id));
+  const total = queue.length;
+  $('#count').textContent = `${Math.min(pos + (total ? 1 : 0), total)} / ${total}`;
+  $('#bar').style.width = total ? (pos / total * 100) + '%' : '0';
+
+  if (!cards.length){
+    box.innerHTML = `<div class="panel empty"><div class="w-el">Καλώς ήρθες</div><p class="muted">Пока нет ни одной карточки. Добавьте свои слова или начните с готового набора из 14 слов, его можно потом изменить или удалить.</p>
+      <div class="row" style="justify-content:center"><button class="btn primary" id="seed">Добавить 14 слов для начала</button><button class="btn" id="goAdd">Добавить свои</button></div></div>`;
+    $('#seed').onclick = () => { const now = Date.now(); saveMany(STARTER.map(([el,ru,note,topic],i) => ({id: uid(), el, ru, note, topic, created: now+i, right:0, wrong:0}))); startSession(); };
+    $('#goAdd').onclick = () => setTab('manage');
+    return;
+  }
+  if (!total){ startSession(); return; }
+  if (pos >= total){
+    box.innerHTML = `<div class="panel empty"><div class="w-el">Μπράβο!</div>
+      <p>Знаю: <b style="color:var(--good)">${results.right}</b> · Не знаю: <b style="color:var(--bad)">${results.wrong}</b></p>
+      <div class="row" style="justify-content:center">${missed.length ? `<button class="btn primary" id="again-missed">Повторить ошибки · ${new Set(missed).size}</button>` : ''}<button class="btn${missed.length?'':' primary'}" id="again">Пройти заново</button></div></div>`;
+    $('#again').onclick = () => startSession();
+    if (missed.length) $('#again-missed').onclick = () => startSession(cards.filter(c => missed.includes(c.id)));
+    return;
+  }
+  const c = current(), m = settings.mode;
+  const note = c.note ? `<div class="note">${esc(c.note)}</div>` : '';
+  const topic = c.topic ? `<span class="topic">${esc(c.topic)}</span>` : '';
+  let front, back;
+  if (m === 'ru'){
+    front = `<span class="tag">По-русски</span>${topic}<div class="w-ru">${esc(c.ru)}</div><span class="hint">Нажмите, чтобы увидеть по-гречески</span>`;
+    back  = `<span class="tag">По-гречески</span>${topic}<div class="w-el" lang="el">${esc(c.el)}</div>${note}${LISTEN}<div class="divider"></div><div class="w-ru sub">${esc(c.ru)}</div>`;
+  } else if (m === 'el'){
+    front = `<span class="tag">По-гречески</span>${topic}<div class="w-el" lang="el">${esc(c.el)}</div>${LISTEN}<span class="hint">Нажмите на карточку, чтобы увидеть перевод</span>`;
+    back  = `<span class="tag">Перевод</span>${topic}<div class="w-ru">${esc(c.ru)}</div><div class="divider"></div><div class="w-el" lang="el" style="font-size:clamp(22px,6vw,28px)">${esc(c.el)}</div>${note}${LISTEN}`;
+  } else {
+    front = `<span class="tag">Слушайте</span>${topic}<button class="play big" data-say aria-label="Прослушать слово">${ICON_PLAY}</button><span class="hint">Нажмите на карточку, чтобы увидеть ответ</span>`;
+    back  = `<span class="tag">Ответ</span>${topic}<div class="w-el" lang="el">${esc(c.el)}</div>${note}${LISTEN}<div class="divider"></div><div class="w-ru">${esc(c.ru)}</div>`;
+  }
+  box.innerHTML = `<div class="stage"><div class="card${flipped?' flipped':''}" id="card" role="button" tabindex="0" aria-label="Перевернуть карточку"><div class="inner"><div class="face front">${front}</div><div class="face back">${back}</div></div></div></div>
+    <div style="margin-top:16px" id="under"></div>`;
+  const cardEl = $('#card');
+  cardEl.addEventListener('click', e => {
+    const say = e.target.closest('[data-say]');
+    if (say){ e.stopPropagation(); speak(c.el, say); return; }
+    flip();
+  });
+  cardEl.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); flip(); } });
+  renderUnder();
+  if (autoplay && m === 'ear') speak(c.el, cardEl.querySelector('.front [data-say]'));
+}
+function flip(){
+  const cardEl = $('#card'); if (!cardEl) return;
+  flipped = !flipped; cardEl.classList.toggle('flipped', flipped);
+  const c = current();
+  if (flipped && settings.mode === 'ru') speak(c.el, cardEl.querySelector('.back [data-say]'));
+  renderUnder();
+}
+function renderUnder(){
+  const u = $('#under'); if (!u) return;
+  if (!flipped){
+    u.innerHTML = `<div class="row" style="justify-content:center"><button class="btn ghost" id="skip">Пропустить</button></div>`;
+    $('#skip').onclick = () => next(null);
+  } else {
+    u.innerHTML = `<div class="answer"><button class="btn bad" id="no">Не знаю</button><button class="btn good" id="yes">Знаю</button></div>`;
+    $('#no').onclick = () => next(false); $('#yes').onclick = () => next(true);
+  }
+}
+function next(ok){
+  stopSpeak();
+  const c = current();
+  if (c && ok !== null){
+    if (ok){ results.right++; } else { results.wrong++; missed.push(c.id); const at = Math.min(queue.length, pos + 4); queue.splice(at, 0, c.id); }
+    const upd = Object.assign({}, c, ok ? {right:(c.right||0)+1} : {wrong:(c.wrong||0)+1}, {seen: Date.now()});
+    saveCard(upd);
+  }
+  pos++; flipped = false; renderStudy(true);
+}
+
+/* ---------- manage ---------- */
+let editing = null, confirmDel = null;
+function renderList(){
+  const q = $('#search').value.trim().toLowerCase();
+  const list = cards.slice().sort((a,b)=>(b.created||0)-(a.created||0)).filter(c => !q || [c.el,c.ru,c.note,c.topic].some(x => (x||'').toLowerCase().includes(q)));
+  $('#total').textContent = cards.length ? `${cards.length} ${plural(cards.length,'карточка','карточки','карточек')}` : '';
+  if (!cards.length){ $('#listBox').innerHTML = '<p class="muted small" style="text-align:center">Здесь появятся ваши карточки.</p>'; return; }
+  $('#listBox').innerHTML = list.length ? `<div class="list">${list.map(c => `
+    <div class="item" data-id="${c.id}">
+      <button class="play" data-say aria-label="Послушать">${ICON_PLAY}</button>
+      <div class="txt"><b lang="el">${esc(c.el)}</b><span>${esc(c.ru)}${c.note?` · <i>${esc(c.note)}</i>`:''}</span>
+        <div class="meta">${c.topic?esc(c.topic)+' · ':''}знаю ${c.right||0} · не знаю ${c.wrong||0}</div></div>
+      <div class="ops"><button data-edit>Изменить</button><button data-del class="${confirmDel===c.id?'really':''}">${confirmDel===c.id?'Точно удалить?':'Удалить'}</button></div>
+    </div>`).join('')}</div>` : '<p class="muted small" style="text-align:center">Ничего не найдено.</p>';
+}
+$('#listBox').addEventListener('click', e => {
+  const item = e.target.closest('.item'); if (!item) return;
+  const c = cards.find(x => x.id === item.dataset.id); if (!c) return;
+  if (e.target.closest('[data-say]')) speak(c.el, e.target.closest('[data-say]'));
+  else if (e.target.closest('[data-edit]')) startEdit(c);
+  else if (e.target.closest('[data-del]')){
+    if (confirmDel === c.id){ confirmDel = null; removeCard(c.id); toast('Карточка удалена'); }
+    else { confirmDel = c.id; renderList(); }
+  }
+});
+function startEdit(c){
+  editing = c.id; $('#fRu').value = c.ru; $('#fEl').value = c.el; $('#fNote').value = c.note||''; $('#fTopic').value = c.topic||'';
+  $('#formTitle').textContent = 'Изменить карточку'; $('#fSubmit').textContent = 'Сохранить'; $('#fCancel').hidden = false;
+  $('#addForm').scrollIntoView({behavior:'smooth', block:'center'}); $('#fRu').focus({preventScroll:true});
+}
+function resetForm(){
+  editing = null; $('#addForm').reset();
+  $('#fTopic').value = settings.lastTopic || '';
+  $('#formTitle').textContent = 'Новая карточка'; $('#fSubmit').textContent = 'Добавить'; $('#fCancel').hidden = true;
+}
+$('#fCancel').onclick = resetForm;
+$('#fPlay').innerHTML = ICON_PLAY;
+$('#fPlay').onclick = e => speak($('#fEl').value.trim(), e.currentTarget);
+$('#addForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const ru = $('#fRu').value.trim(), el = $('#fEl').value.trim();
+  if (!ru || !el) return;
+  const note = $('#fNote').value.trim(), topic = $('#fTopic').value.trim();
+  settings.lastTopic = topic; saveSettings();
+  if (editing){ const c = cards.find(x => x.id === editing); saveCard(Object.assign({}, c, {ru, el, note, topic})); toast('Сохранено'); }
+  else { const c = {id: uid(), ru, el, note, topic, created: Date.now(), right:0, wrong:0}; saveCard(c); queue.push(c.id); toast('Карточка добавлена'); }
+  resetForm(); $('#fRu').focus();
+});
+$('#importBtn').onclick = () => {
+  const lines = $('#importText').value.split(/\n+/).map(s => s.trim()).filter(Boolean);
+  const now = Date.now(); const out = [];
+  lines.forEach((ln, i) => {
+    const [pair, topic] = ln.split('|').map(s => s && s.trim());
+    const m = pair.split(/\s+[—–-]\s+|\t|\s*[—–]\s*/);
+    if (m.length >= 2 && m[0] && m[1]) out.push({id: uid(), el: m[0].trim(), ru: m.slice(1).join(' — ').trim(), note:'', topic: topic||'', created: now+i, right:0, wrong:0});
+  });
+  if (!out.length){ toast('Не нашёл строк вида «слово — перевод»'); return; }
+  saveMany(out); out.forEach(c => queue.push(c.id));
+  $('#importText').value = ''; $('#importBox').open = false;
+  toast(`Добавлено: ${out.length}`);
+};
+$('#search').addEventListener('input', renderList);
+function plural(n,a,b,c){ const m10=n%10, m100=n%100; return m10===1&&m100!==11?a:(m10>=2&&m10<=4&&(m100<10||m100>=20)?b:c); }
+
+/* ---------- settings ---------- */
+function saveSettings(){ LS.set('gk.settings', settings); }
+function paintSeg(id, val){ document.querySelectorAll(id+' button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.v) === Number(val)))); }
+[['#rateSeg','rate'],['#repSeg','rep'],['#pauseSeg','pause']].forEach(([id,key]) => {
+  paintSeg(id, settings[key]);
+  $(id).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; settings[key] = Number(b.dataset.v); paintSeg(id, settings[key]); saveSettings(); });
+});
+$('#voiceSel').onchange = e => { settings.voice = e.target.value; saveSettings(); };
+$('#testVoice').onclick = e => speak('Καλημέρα, τι κάνεις;', e.currentTarget);
+$('#openSettings').onclick = () => { loadVoices(); $('#settings').hidden = false; };
+$('#closeSettings').onclick = () => { $('#settings').hidden = true; };
+$('#settings').addEventListener('click', e => { if (e.target.id === 'settings') $('#settings').hidden = true; });
+
+/* ---------- modes, topics, tabs ---------- */
+function paintModes(){ document.querySelectorAll('.modes button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === settings.mode))); }
+document.querySelector('.modes').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  settings.mode = b.dataset.mode; saveSettings(); paintModes(); stopSpeak(); flipped = false; renderStudy(true);
+});
+$('#topicFilter').onchange = e => { settings.topic = e.target.value; saveSettings(); startSession(); };
+function setTab(t){
+  document.querySelectorAll('nav.tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  $('#study').hidden = t !== 'study'; $('#manage').hidden = t !== 'manage';
+  stopSpeak();
+  try{ sessionStorage.setItem('gk.tab', t); }catch(e){}
+  if (t === 'study') renderStudy(false); else renderList();
+}
+document.querySelector('nav.tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTab(b.dataset.tab); });
+
+let toastT;
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 1800); }
+
+function refreshAll(){
+  renderTopics();
+  // add newly arrived cards (e.g. from another device) to the session
+  const inPool = pool().map(c => c.id).filter(id => !queue.includes(id));
+  if (queue.length && inPool.length) queue.push(...inPool);
+  if (!$('#study').hidden){ if (!$('#card') || !current()) renderStudy(false); else { const n = queue.length; $('#count').textContent = `${pos+1} / ${n}`; $('#bar').style.width = (pos/n*100)+'%'; } }
+  if (!$('#manage').hidden) renderList();
+}
+
+/* boot */
+paintModes(); renderTopics(); resetForm(); setSync();
+let startTab = 'study'; try{ startTab = sessionStorage.getItem('gk.tab') || 'study'; }catch(e){}
+queue = shuffle(pool().map(c => c.id));
+setTab(startTab);
+})();
+</script>
+</body>
+</html>
