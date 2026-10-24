@@ -254,7 +254,8 @@ const LS = {
 
 /* ---------- state ---------- */
 let cards = LS.get('gk.cards', []);          // [{id, ru, el, note, topic, created, right, wrong}]
-let dirtyLocal = LS.get('gk.pending', false);  // cards changed while cloud was unreachable
+let unsynced = new Set(LS.get('gk.unsynced', []));  // ids saved here but not yet confirmed by the cloud
+let legacyPending = LS.get('gk.pending', false);   // older versions only kept a yes/no flag
 let settings = Object.assign({voice:'', rate:0.85, rep:1, pause:1.4, mode:'ru', topic:''}, LS.get('gk.settings', {}));
 let col = null;                               // db collection when cloud is available
 
@@ -278,22 +279,46 @@ const STARTER = [
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const topics = () => [...new Set(cards.map(c => (c.topic || '').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
 
-function persistLocal(){ LS.set('gk.cards', cards); LS.set('gk.pending', dirtyLocal); }
+function persistLocal(){ LS.set('gk.cards', cards); LS.set('gk.unsynced', [...unsynced]); }
+
+// Write one card to the cloud, retrying once. A card that still fails stays in `unsynced`,
+// is kept on screen and is pushed again on the next snapshot or page load.
+async function push(c){
+  if (!col){ unsynced.add(c.id); return false; }
+  for (let attempt = 0; attempt < 2; attempt++){
+    try{ await col.doc(c.id).set(c); unsynced.delete(c.id); return true; }
+    catch(e){ await new Promise(r => setTimeout(r, 600 + Math.random()*600)); }
+  }
+  unsynced.add(c.id); return false;
+}
+let flushing = false;
+async function flush(){
+  if (flushing || !col || !unsynced.size) return;
+  flushing = true;
+  let failed = 0;
+  for (const id of [...unsynced]){
+    const c = cards.find(x => x.id === id);
+    if (!c){ unsynced.delete(id); continue; }
+    if (!await push(c)) failed++;
+  }
+  flushing = false; persistLocal();
+  if (failed) toast(`Не удалось сохранить в аккаунт: ${failed}. Попробую ещё раз позже`);
+}
 
 async function saveCard(c){
   const i = cards.findIndex(x => x.id === c.id);
   if (i >= 0) cards[i] = c; else cards.push(c);
-  if (col){ try{ await col.doc(c.id).set(c); }catch(e){ dirtyLocal = true; } } else dirtyLocal = true;
-  persistLocal(); refreshAll();
+  unsynced.add(c.id); persistLocal(); refreshAll();
+  await push(c); persistLocal();
 }
 async function saveMany(list){
-  for (const c of list){ const i = cards.findIndex(x=>x.id===c.id); if(i>=0) cards[i]=c; else cards.push(c); }
+  for (const c of list){ const i = cards.findIndex(x=>x.id===c.id); if(i>=0) cards[i]=c; else cards.push(c); unsynced.add(c.id); }
   persistLocal(); refreshAll();
-  if (col){ for (const c of list){ try{ await col.doc(c.id).set(c); }catch(e){ dirtyLocal = true; } } } else dirtyLocal = true;
-  persistLocal();
+  await flush();
 }
 async function removeCard(id){
   cards = cards.filter(c => c.id !== id);
+  unsynced.delete(id);
   persistLocal(); refreshAll();
   if (col){ try{ await col.doc(id).delete(); }catch(e){} }
 }
@@ -308,19 +333,19 @@ async function removeCard(id){
     if (!id) return;
     col = db.collection('data/users/' + id);
     let first = true;
-    col.onSnapshot(async snap => {
+    col.onSnapshot(snap => {
       const remote = snap.docs.map(d => Object.assign({id: d.id}, d.data()));
+      const have = new Set(remote.map(r => r.id));
       if (first){
         first = false;
-        if (dirtyLocal && cards.length){
-          const have = new Set(remote.map(r => r.id));
-          const missing = cards.filter(c => !have.has(c.id));
-          for (const c of missing){ try{ await col.doc(c.id).set(c); remote.push(c); }catch(e){} }
-          dirtyLocal = false;
-        }
+        // cards made by an older version while offline: push everything the cloud lacks
+        if (legacyPending){ cards.forEach(c => { if (!have.has(c.id)) unsynced.add(c.id); }); legacyPending = false; LS.set('gk.pending', false); }
       }
-      cards = remote;
+      // never drop cards the cloud has not confirmed yet
+      const local = cards.filter(c => unsynced.has(c.id) && !have.has(c.id));
+      cards = remote.concat(local);
       persistLocal(); refreshAll();
+      flush();
     }, () => { col = null; setSync(); });
     setSync();
   }catch(e){ col = null; }
@@ -529,9 +554,13 @@ $('#importBtn').onclick = () => {
     if (m.length >= 2 && m[0] && m[1]) out.push({id: uid(), el: m[0].trim(), ru: m.slice(1).join(' — ').trim(), note:'', topic: topic||'', created: now+i, right:0, wrong:0});
   });
   if (!out.length){ toast('Не нашёл строк вида «слово — перевод»'); return; }
-  saveMany(out); out.forEach(c => queue.push(c.id));
+  const key = c => c.el.normalize('NFC').toLocaleLowerCase('el').replace(/\s+/g, ' ');
+  const seen = new Set(cards.map(key));
+  const fresh = out.filter(c => { const k = key(c); if (seen.has(k)) return false; seen.add(k); return true; });
+  const dup = out.length - fresh.length;
+  if (fresh.length){ saveMany(fresh); fresh.forEach(c => queue.push(c.id)); }
   $('#importText').value = ''; $('#importBox').open = false;
-  toast(`Добавлено: ${out.length}`);
+  toast(fresh.length ? `Добавлено: ${fresh.length}` + (dup ? ` · уже были: ${dup}` : '') : `Все ${dup} уже есть в списке`);
 };
 $('#search').addEventListener('input', renderList);
 function plural(n,a,b,c){ const m10=n%10, m100=n%100; return m10===1&&m100!==11?a:(m10>=2&&m10<=4&&(m100<10||m100>=20)?b:c); }
